@@ -1,0 +1,415 @@
+<div
+  style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    background-color: #ffffff55;
+    padding: 10px;
+  "
+>
+  <button onclick="toggleHelpers()">Toggle Helpers</button>
+  <button onclick="toggleRenderer()">Toggle Renderer</button>
+  <br />
+  <button onclick="render()">Render</button>
+  <p>Number of Bezier Curves: <span id="beziers-value">15</span></p>
+  <input type="range" min="1" max="100" value="15" id="beziers" />
+  <p>Number of Control Points: <span id="control-value">4</span></p>
+  <input type="button" value="+" id="control_plus" />
+  <input type="button" value="-" id="control_minus" />
+  <br />
+  <p>Background Color</p>
+  <input type="color" id="bg_color" value="#000000" />
+  <br />
+  <p>Stroke Color</p>
+  <input type="color" id="stroke_color" value="#ffffff" />
+  <br />
+  <p>Stroke width</p>
+  <input type="range" min="1" max="15" value="2" id="stroke_width" />
+</div>
+
+<canvas
+  style="position: fixed; top: 0; left: 0"
+  id="canvas"
+  width="1280"
+  height="900"
+></canvas>
+
+<script>
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  let beziers = 15;
+  let control = 4;
+  let bg_color = "#000000";
+  let stroke_color = "#ffffff";
+  let stroke_width = 2;
+
+  let show_renderer = true;
+
+  const render = () => {
+    // create an svg
+    let path = `<svg viewBox="400 200 400 600" width="2000" height="3000" xmlns="http://www.w3.org/2000/svg">`;
+
+    path += `<defs>
+        <clipPath id="clip">
+        <rect x="400" y="200" width="400" height="600" />
+        </clipPath>
+    </defs>`;
+
+    let color = stroke_color;
+
+    for (let i = 0; i < beziers; i++) {
+      let opacity = (i / beziers).toFixed(2);
+
+      path += `<path clip-path="url(#clip)" stroke="${color}" fill="none" stroke-width="${stroke_width}" stroke-opacity="${opacity}" d="`;
+
+      for (let j = 0; j < control - 1; j++) {
+        const first1 = lines[j * (beziers + 1)];
+        const first2 = lines[(j + 1) * (beziers + 1)];
+
+        const start = lines[i + j * (beziers + 1)];
+        const end = lines[i + (j + 1) * (beziers + 1)];
+
+        const control1 = lines[j * (beziers + 1) + beziers];
+        const control2 = lines[(j + 1) * (beziers + 1) + beziers];
+
+        // ctx.moveTo(start.x, start.y);
+        // ctx.bezierCurveTo(
+        //   start.x + control1.x - first1.x,
+        //   start.y + control1.y - first1.y,
+        //   end.x - control2.x + first2.x,
+        //   end.y - control2.y + first2.y,
+        //   end.x,
+        //   end.y
+        // );
+
+        path += `M ${start.x} ${start.y} C ${start.x + control1.x - first1.x} ${
+          start.y + control1.y - first1.y
+        } ${end.x - control2.x + first2.x} ${end.y - control2.y + first2.y} ${
+          end.x
+        } ${end.y} `;
+      }
+
+      path += `"/>`;
+    }
+
+    path += `</svg>`;
+
+    const svg = new Blob([path], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(svg);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bezier.svg";
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleRenderer = () => {
+    show_renderer = !show_renderer;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set_bg_color(bg_color);
+    draw(lines);
+  };
+
+  ctx.fillStyle = bg_color;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = stroke_color;
+
+  const bg_color_input = document.getElementById("bg_color");
+  bg_color_input.oninput = () => {
+    set_bg_color(bg_color_input.value);
+    draw(lines);
+  };
+
+  const stroke_color_input = document.getElementById("stroke_color");
+  stroke_color_input.oninput = () => {
+    stroke_color = stroke_color_input.value;
+    ctx.strokeStyle = stroke_color;
+    draw(lines);
+  };
+
+  const set_bg_color = (color) => {
+    bg_color = color;
+    ctx.fillStyle = bg_color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const toggleHelpers = () => {
+    draw_helpers = !draw_helpers;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set_bg_color(bg_color);
+    draw(lines);
+  };
+
+  const stroke_width_input = document.getElementById("stroke_width");
+
+  stroke_width_input.oninput = () => {
+    stroke_width = parseInt(stroke_width_input.value);
+    ctx.lineWidth = stroke_width;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set_bg_color(bg_color);
+    draw(lines);
+  };
+
+  const beziersInput = document.getElementById("beziers");
+  const controlPlus = document.getElementById("control_plus");
+  const controlMinus = document.getElementById("control_minus");
+
+  beziersInput.oninput = () => {
+    document.getElementById("beziers-value").innerText = beziersInput.value;
+    lines = reinterpolate(beziers, parseInt(beziersInput.value));
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set_bg_color(bg_color);
+
+    beziers = parseInt(beziersInput.value);
+    draw(lines);
+  };
+
+  controlPlus.onclick = () => {
+    document.getElementById("control-value").innerText = control + 1;
+    control++;
+    add_control();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set_bg_color(bg_color);
+    draw(lines);
+  };
+
+  controlMinus.onclick = () => {
+    if (control > 1) {
+      document.getElementById("control-value").innerText = control - 1;
+      control--;
+      lines = lines.slice(0, (beziers + 1) * control);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      set_bg_color(bg_color);
+      draw(lines);
+    }
+  };
+
+  let draw_helpers = true;
+
+  let lines = [];
+
+  const add_control = () => {
+    const start = {
+      x: 200 + Math.random() * 880,
+      y: 200 + Math.random() * 500,
+    };
+    const end = {
+      x: 200 + Math.random() * 880,
+      y: 200 + Math.random() * 500,
+    };
+    const controlPt = { x: Math.random() * 100, y: Math.random() * 100 };
+
+    for (let j = 0; j < beziers; j++) {
+      const t = j / beziers;
+      const x = start.x + t * (end.x - start.x);
+      const y = start.y + t * (end.y - start.y);
+      lines.push({ x, y });
+    }
+
+    lines.push({ x: start.x + controlPt.x, y: start.y + controlPt.y });
+  };
+
+  const init = () => {
+    console.log("init");
+    lines = [];
+    for (let i = 0; i < control; i++) {
+      add_control();
+    }
+    console.log(lines);
+
+    set_bg_color(bg_color);
+  };
+
+  const reinterpolate = (old_beziers, new_beziers) => {
+    let new_lines = new Array((new_beziers + 1) * control);
+
+    // reinterpolate
+    for (let i = 0; i < control; i++) {
+      const start = lines[i * (old_beziers + 1)];
+      const end = lines[i * (old_beziers + 1) + old_beziers - 1];
+      const control = lines[i * (old_beziers + 1) + old_beziers];
+
+      //   console.log(start, end, control);
+
+      new_lines[i * (new_beziers + 1)] = start;
+      new_lines[i * (new_beziers + 1) + new_beziers - 1] = end;
+      new_lines[i * (new_beziers + 1) + new_beziers] = control;
+
+      for (let j = 1; j < new_beziers - 1; j++) {
+        const t = j / (new_beziers - 1);
+        // console.log(start, end);
+        const x = start.x + t * (end.x - start.x);
+        const y = start.y + t * (end.y - start.y);
+        new_lines[i * (new_beziers + 1) + j] = { x, y };
+      }
+    }
+
+    console.log(new_lines);
+    return new_lines;
+  };
+
+  const draw = (lines) => {
+    lines = reinterpolate(beziers, beziers);
+
+    if (draw_helpers)
+      for (let i = 0; i < control; i++) {
+        const interpolated = lines.slice(
+          i * (beziers + 1),
+          (i + 1) * (beziers + 1)
+        );
+
+        // draw line from start to end
+
+        ctx.beginPath();
+        ctx.moveTo(interpolated[0].x, interpolated[0].y);
+        ctx.lineTo(interpolated[beziers - 1].x, interpolated[beziers - 1].y);
+        ctx.stroke();
+
+        // draw control points
+        ctx.fillStyle = "red";
+        for (let j = 0; j < beziers; j++) {
+          ctx.beginPath();
+
+          let w;
+          if (j === 0 || j === beziers - 1) {
+            w = 5;
+          } else {
+            w = 2;
+          }
+
+          ctx.arc(interpolated[j].x, interpolated[j].y, w, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+
+        const control1 = interpolated[beziers];
+
+        ctx.fillStyle = "blue";
+        ctx.beginPath();
+        ctx.arc(control1.x, control1.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // dotted line from start to control
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.moveTo(interpolated[0].x, interpolated[0].y);
+        ctx.lineTo(control1.x, control1.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+    let color = stroke_color;
+
+    for (let i = 0; i < beziers; i++) {
+      let opacity_hex = Math.floor((i / beziers) * 255).toString(16);
+
+      if (opacity_hex.length === 1) {
+        opacity_hex = "0" + opacity_hex;
+      }
+
+      ctx.strokeStyle = color + opacity_hex;
+      ctx.beginPath();
+
+      for (let j = 0; j < control - 1; j++) {
+        const first1 = lines[j * (beziers + 1)];
+        const first2 = lines[(j + 1) * (beziers + 1)];
+
+        const start = lines[i + j * (beziers + 1)];
+        const end = lines[i + (j + 1) * (beziers + 1)];
+
+        const control1 = lines[j * (beziers + 1) + beziers];
+        const control2 = lines[(j + 1) * (beziers + 1) + beziers];
+
+        ctx.moveTo(start.x, start.y);
+        ctx.bezierCurveTo(
+          start.x + control1.x - first1.x,
+          start.y + control1.y - first1.y,
+          end.x - control2.x + first2.x,
+          end.y - control2.y + first2.y,
+          end.x,
+          end.y
+        );
+      }
+
+      ctx.stroke();
+    }
+
+    if (show_renderer) {
+      // dotted black and white line from (400, 400) to (900, 900)
+      ctx.strokeStyle = "white";
+      ctx.beginPath();
+      ctx.moveTo(400 + 0, 200 + 0);
+      ctx.lineTo(400 + 400, 200 + 0);
+      ctx.lineTo(400 + 400, 800);
+      ctx.lineTo(400 + 0, 800);
+      ctx.lineTo(400 + 0, 200 + 0);
+      ctx.stroke();
+
+      ctx.strokeStyle = "black";
+      ctx.beginPath();
+      ctx.setLineDash([5, 5]);
+      ctx.moveTo(400 + 0, 200 + 0);
+      ctx.lineTo(400 + 400, 200 + 0);
+      ctx.lineTo(400 + 400, 800);
+      ctx.lineTo(400 + 0, 800);
+      ctx.lineTo(400 + 0, 200 + 0);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.strokeStyle = stroke_color;
+    }
+  };
+
+  init();
+  draw(lines);
+
+  let clicked = false;
+  let index_clicked = -1;
+
+  canvas.addEventListener("mousedown", (e) => {
+    index_clicked = -1;
+    const x = e.clientX - canvas.getBoundingClientRect().left;
+    const y = e.clientY - canvas.getBoundingClientRect().top;
+
+    for (let i = 0; i < lines.length; i++) {
+      const dx = lines[i].x - x;
+      const dy = lines[i].y - y;
+
+      if (dx * dx + dy * dy < 25) {
+        // only allow to move control points and starts and ends
+        if (
+          i % (beziers + 1) === 0 ||
+          i % (beziers + 1) === beziers ||
+          i % (beziers + 1) === beziers - 1
+        ) {
+          index_clicked = i;
+          console.log(index_clicked);
+          break;
+        }
+      }
+    }
+
+    clicked = true;
+  });
+  canvas.addEventListener("mouseup", (e) => {
+    clicked = false;
+  });
+  canvas.addEventListener("mousemove", (e) => {
+    if (clicked && index_clicked !== -1) {
+      const x = e.clientX - canvas.getBoundingClientRect().left;
+      const y = e.clientY - canvas.getBoundingClientRect().top;
+
+      lines[index_clicked].x = x;
+      lines[index_clicked].y = y;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      set_bg_color(bg_color);
+      draw(lines);
+    }
+  });
+</script>
