@@ -11,7 +11,7 @@
   <button onclick="toggleHelpers()">Toggle Helpers</button>
   <button onclick="toggleRenderer()">Toggle Renderer</button>
   <br />
-  <button onclick="render()">Render</button>
+  <button onclick="renderOut()">Render</button>
   <p>Number of Bezier Curves: <span id="beziers-value">15</span></p>
   <input type="range" min="1" max="100" value="15" id="beziers" />
   <p>Number of Control Points: <span id="control-value">4</span></p>
@@ -47,13 +47,15 @@
 
   let show_renderer = true;
 
-  const render = () => {
+  const render = (lines) => {
+    lines = reinterpolate(lines, beziers, beziers);
+
     // create an svg
     let path = `<svg viewBox="400 200 400 600" width="2000" height="3000" xmlns="http://www.w3.org/2000/svg">`;
 
     path += `<defs>
         <clipPath id="clip">
-        <rect x="400" y="200" width="400" height="600" />
+            <rect x="400" y="200" width="400" height="600" />
         </clipPath>
     </defs>`;
 
@@ -84,11 +86,26 @@
         //   end.y
         // );
 
-        path += `M ${start.x} ${start.y} C ${start.x + control1.x - first1.x} ${
+        path += `M ${start.x} ${start.y} `;
+        path += `C ${
+          //
+          start.x + control1.x - first1.x
+        } ${
+          //
           start.y + control1.y - first1.y
-        } ${end.x - control2.x + first2.x} ${end.y - control2.y + first2.y} ${
+        } ${
+          //
+          end.x - control2.x + first2.x
+        } ${
+          //
+          end.y - control2.y + first2.y
+        } ${
+          //
           end.x
-        } ${end.y} `;
+        } ${
+          //
+          end.y
+        } `;
       }
 
       path += `"/>`;
@@ -105,13 +122,15 @@
     a.click();
 
     URL.revokeObjectURL(url);
+
+    console.log(lines);
   };
 
   const toggleRenderer = () => {
     show_renderer = !show_renderer;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     set_bg_color(bg_color);
-    draw(lines);
+    lines = draw(lines);
   };
 
   ctx.fillStyle = bg_color;
@@ -121,20 +140,25 @@
 
   const bg_color_input = document.getElementById("bg_color");
   bg_color_input.oninput = () => {
-    set_bg_color(bg_color_input.value);
-    draw(lines);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set_bg_color(bg_color);
+    lines = draw(lines);
   };
 
   const stroke_color_input = document.getElementById("stroke_color");
   stroke_color_input.oninput = () => {
     stroke_color = stroke_color_input.value;
     ctx.strokeStyle = stroke_color;
-    draw(lines);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set_bg_color(bg_color);
+    lines = draw(lines);
   };
 
   const set_bg_color = (color) => {
     bg_color = color;
     ctx.fillStyle = bg_color;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   };
 
@@ -142,7 +166,7 @@
     draw_helpers = !draw_helpers;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     set_bg_color(bg_color);
-    draw(lines);
+    lines = draw(lines);
   };
 
   const stroke_width_input = document.getElementById("stroke_width");
@@ -152,7 +176,7 @@
     ctx.lineWidth = stroke_width;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     set_bg_color(bg_color);
-    draw(lines);
+    lines = draw(lines);
   };
 
   const beziersInput = document.getElementById("beziers");
@@ -161,13 +185,13 @@
 
   beziersInput.oninput = () => {
     document.getElementById("beziers-value").innerText = beziersInput.value;
-    lines = reinterpolate(beziers, parseInt(beziersInput.value));
+    lines = reinterpolate(lines, beziers, parseInt(beziersInput.value));
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     set_bg_color(bg_color);
 
     beziers = parseInt(beziersInput.value);
-    draw(lines);
+    lines = draw(lines);
   };
 
   controlPlus.onclick = () => {
@@ -176,7 +200,7 @@
     add_control();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     set_bg_color(bg_color);
-    draw(lines);
+    lines = draw(lines);
   };
 
   controlMinus.onclick = () => {
@@ -186,7 +210,7 @@
       lines = lines.slice(0, (beziers + 1) * control);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       set_bg_color(bg_color);
-      draw(lines);
+      lines = draw(lines);
     }
   };
 
@@ -226,7 +250,7 @@
     set_bg_color(bg_color);
   };
 
-  const reinterpolate = (old_beziers, new_beziers) => {
+  const reinterpolate = (lines, old_beziers, new_beziers) => {
     let new_lines = new Array((new_beziers + 1) * control);
 
     // reinterpolate
@@ -250,12 +274,14 @@
       }
     }
 
+    lines = new_lines;
+
     console.log(new_lines);
     return new_lines;
   };
 
   const draw = (lines) => {
-    lines = reinterpolate(beziers, beziers);
+    lines = reinterpolate(lines, beziers, beziers);
 
     if (draw_helpers)
       for (let i = 0; i < control; i++) {
@@ -363,10 +389,12 @@
       ctx.setLineDash([]);
       ctx.strokeStyle = stroke_color;
     }
+
+    return lines;
   };
 
   init();
-  draw(lines);
+  lines = draw(lines);
 
   let clicked = false;
   let index_clicked = -1;
@@ -409,7 +437,11 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       set_bg_color(bg_color);
-      draw(lines);
+      lines = draw(lines);
     }
   });
+
+  const renderOut = () => {
+    render(lines);
+  };
 </script>
